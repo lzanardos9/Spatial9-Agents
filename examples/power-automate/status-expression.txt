@@ -1,0 +1,1 @@
+body('HTTP_Check_status')?['result']?['structuredContent']?['status']

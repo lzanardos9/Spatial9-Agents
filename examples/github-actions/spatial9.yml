@@ -1,0 +1,23 @@
+# .github/workflows/spatial9.yml
+name: Spatial9 immersive renders
+on:
+  push:
+    paths: ["masters/**.wav"]       # run when a new or changed master lands
+  workflow_dispatch:                # or run it by hand from the Actions tab
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120            # three renders at a time, 10 to 20 minutes each
+    steps:
+      - uses: actions/checkout@v4
+        with: { lfs: true }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install requests
+      - name: Render masters with Spatial9
+        env:
+          SPATIAL9_KEY: ${{ secrets.SPATIAL9_KEY }}   # stored as a repository secret
+        run: python spatial9_pipeline.py masters/ out/
+      - uses: actions/upload-artifact@v4
+        with: { name: immersive-renders, path: out/ }

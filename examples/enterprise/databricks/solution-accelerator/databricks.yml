@@ -1,0 +1,59 @@
+# Databricks Asset Bundle for the Spatial9 Solutions Accelerator.
+#   databricks bundle validate
+#   databricks bundle deploy -t dev
+#   databricks bundle run spatial9_accelerator -t dev
+bundle:
+  name: spatial9-solutions-accelerator
+
+sync:
+  paths:
+    - .
+    - ../../shared          # spatial9_mcp.py and spatial9_a2a.py
+
+variables:
+  catalog:
+    default: main
+  schema:
+    default: spatial9_accelerator
+  secret_scope:
+    default: spatial9
+  warehouse_id:
+    description: SQL warehouse for the gold views
+
+resources:
+  jobs:
+    spatial9_accelerator:
+      name: Spatial9 immersive catalog
+      max_concurrent_runs: 1           # one run at a time keeps the 3-renders-at-once limit simple
+      schedule:
+        quartz_cron_expression: "0 0/15 * * * ?"   # every 15 minutes
+        timezone_id: UTC
+        pause_status: PAUSED                        # unpause after the first manual run looks right
+      parameters:
+        - { name: catalog, default: "${var.catalog}" }
+        - { name: schema, default: "${var.schema}" }
+        - { name: secret_scope, default: "${var.secret_scope}" }
+      tasks:
+        - task_key: ingest
+          notebook_task: { notebook_path: ./02_ingest_masters.py }
+        - task_key: render_mcp
+          depends_on: [{ task_key: ingest }]
+          notebook_task: { notebook_path: ./03_render_mcp.py }
+        - task_key: delegate_a2a
+          depends_on: [{ task_key: render_mcp }]
+          notebook_task: { notebook_path: ./04_delegate_a2a.py }
+        - task_key: atmos_rest_api
+          depends_on: [{ task_key: ingest }]
+          notebook_task: { notebook_path: ./05_atmos_rest_api.py }
+        - task_key: gold
+          depends_on: [{ task_key: delegate_a2a }, { task_key: atmos_rest_api }]
+          notebook_task:
+            notebook_path: ./06_gold_views.sql
+            warehouse_id: ${var.warehouse_id}
+
+targets:
+  dev:
+    mode: development
+    default: true
+  prod:
+    mode: production

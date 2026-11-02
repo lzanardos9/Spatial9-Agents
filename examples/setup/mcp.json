@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "spatial9": {
+      "type": "http",
+      "url": "https://spatial9.ai/mcp",
+      "headers": { "Authorization": "Bearer ${SPATIAL9_KEY}" }
+    }
+  }
+}

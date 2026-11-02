@@ -1,0 +1,53 @@
+{
+  "Comment": "Render a catalog with Spatial9: 3 at a time, poll every 45 seconds, save to S3.",
+  "StartAt": "Tracks",
+  "States": {
+    "Tracks": {
+      "Type": "Map",
+      "ItemsPath": "$.tracks",
+      "MaxConcurrency": 3,
+      "ItemProcessor": {
+        "ProcessorConfig": { "Mode": "INLINE" },
+        "StartAt": "Start",
+        "States": {
+          "Start": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": { "FunctionName": "spatial9", "Payload.$": "States.JsonMerge($, States.StringToJson('{\"action\":\"start\"}'), false)" },
+            "OutputPath": "$.Payload",
+            "Retry": [{ "ErrorEquals": ["States.TaskFailed"], "IntervalSeconds": 30, "MaxAttempts": 2 }],
+            "Next": "Wait"
+          },
+          "Wait": { "Type": "Wait", "Seconds": 45, "Next": "Status" },
+          "Status": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": { "FunctionName": "spatial9", "Payload.$": "States.JsonMerge($, States.StringToJson('{\"action\":\"status\"}'), false)" },
+            "OutputPath": "$.Payload",
+            "Next": "Done?"
+          },
+          "Done?": {
+            "Type": "Choice",
+            "Choices": [
+              { "Variable": "$.status", "StringEquals": "completed", "Next": "Save" },
+              { "Or": [
+                  { "Variable": "$.status", "StringEquals": "failed" },
+                  { "Variable": "$.status", "StringEquals": "cancelled" }
+                ], "Next": "Failed" }
+            ],
+            "Default": "Wait"
+          },
+          "Save": {
+            "Type": "Task",
+            "Resource": "arn:aws:states:::lambda:invoke",
+            "Parameters": { "FunctionName": "spatial9", "Payload.$": "States.JsonMerge($, States.StringToJson('{\"action\":\"save\"}'), false)" },
+            "OutputPath": "$.Payload",
+            "End": true
+          },
+          "Failed": { "Type": "Pass", "Comment": "Failed renders are refunded. The error explains why.", "End": true }
+        }
+      },
+      "End": true
+    }
+  }
+}
